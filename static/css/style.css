@@ -857,28 +857,45 @@ select:hover {
   text-align: right;
 }
 
-.help-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.settings-section {
+  display: grid;
+  gap: 0;
   margin: 0 0 20px;
-  padding: 12px 0;
+  padding: 8px 0;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
-.section-subtitle {
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--border);
+}
+
+.settings-label {
   font-size: 11px;
   color: var(--text-muted);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  flex-shrink: 0;
 }
-.section-buttons {
+
+.settings-buttons {
   display: flex;
+  align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
-.section-btn {
+
+.settings-btn {
   background: var(--surface2);
   border: 1px solid var(--border);
   color: var(--text);
@@ -887,21 +904,21 @@ select:hover {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition:
-    color 0.2s,
-    border-color 0.2s,
-    background-color 0.2s;
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
 }
-.section-btn:hover {
+
+.settings-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
-.section-btn.active {
+
+.settings-btn.active {
   background: var(--accent-tint-strong);
   border-color: var(--accent);
   color: var(--accent);
 }
-.section-btn:focus-visible {
+
+.settings-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

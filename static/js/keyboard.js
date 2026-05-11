@@ -166,6 +166,21 @@ const THEME_LABELS = {
   light: 'theme_light',
 };
 
+function createSettingsRow(labelText) {
+  const row = document.createElement('div');
+  row.className = 'settings-row';
+
+  const label = document.createElement('div');
+  label.className = 'settings-label';
+  label.textContent = labelText;
+
+  const buttons = document.createElement('div');
+  buttons.className = 'settings-buttons';
+
+  row.append(label, buttons);
+  return { row, label, buttons };
+}
+
 export function openShortcutsHelp() {
   if (document.getElementById("shortcuts-help-overlay")) return;
 
@@ -184,21 +199,13 @@ export function openShortcutsHelp() {
   const heading = document.createElement("h2");
   heading.id = "shortcuts-help-title";
 
-  const langSection = document.createElement("div");
-  langSection.className = "help-section";
-  const langLabel = document.createElement("div");
-  langLabel.className = "section-subtitle";
-  const langButtons = document.createElement("div");
-  langButtons.className = "section-buttons";
-  langSection.append(langLabel, langButtons);
+  const settingsSection = document.createElement('div');
+  settingsSection.className = 'settings-section';
 
-  const themeSection = document.createElement('div');
-  themeSection.className = 'help-section';
-  const themeLabel = document.createElement('div');
-  themeLabel.className = 'section-subtitle';
-  const themeButtons = document.createElement('div');
-  themeButtons.className = 'section-buttons';
-  themeSection.append(themeLabel, themeButtons);
+  const languageRow = createSettingsRow('');
+  const themeRow = createSettingsRow('');
+
+  settingsSection.append(languageRow.row, themeRow.row);
 
   const list = document.createElement("ul");
   list.className = "shortcuts-list";
@@ -218,14 +225,14 @@ export function openShortcutsHelp() {
   closeBtn.className = "btn-primary";
 
   actions.append(replayBtn, spacer, closeBtn);
-  modal.append(heading, langSection, themeSection, list, actions);
+  modal.append(heading, settingsSection, list, actions);
   overlay.append(modal);
   document.body.appendChild(overlay);
 
   const render = () => {
     heading.textContent = t("shortcuts_title");
-    langLabel.textContent = t("language_label");
-    themeLabel.textContent = t("theme_label");
+    languageRow.label.textContent = t("language_label");
+    themeRow.label.textContent = t("theme_label");
     replayBtn.textContent = t("replay_tutorial");
     closeBtn.textContent = t("close");
 
@@ -234,50 +241,55 @@ export function openShortcutsHelp() {
       const li = document.createElement("li");
       const keys = document.createElement("span");
       keys.className = "shortcut-keys";
+
       s.keys.forEach((k, i) => {
         const kbd = document.createElement("kbd");
         kbd.textContent = k;
         keys.appendChild(kbd);
         if (i < s.keys.length - 1) keys.append("+");
       });
+
       const label = document.createElement("span");
       label.className = "shortcut-label";
       label.textContent = t(s.labelKey);
+
       li.append(keys, label);
       list.appendChild(li);
     }
 
-    langButtons.replaceChildren();
+    languageRow.buttons.replaceChildren();
     Object.keys(translations).forEach((code) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "section-btn" + (state.lang === code ? " active" : "");
+      btn.className = "settings-btn" + (state.lang === code ? " active" : "");
       btn.textContent = LANGUAGE_NATIVE[code] || code;
+
       btn.addEventListener("click", () => {
         if (state.lang === code) return;
         state.lang = code;
         updateUILanguage();
         updateURL();
-        // render() replaced the buttons; move focus back onto the new active one.
-        langButtons.querySelector(".section-btn.active")?.focus();
+        languageRow.buttons.querySelector(".settings-btn.active")?.focus();
       });
-      langButtons.appendChild(btn);
+
+      languageRow.buttons.appendChild(btn);
     });
-    themeButtons.replaceChildren();
+
+    themeRow.buttons.replaceChildren();
     Object.entries(THEME_LABELS).forEach(([mode, labelKey]) => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = `section-btn ${state.theme === mode ? 'active' : ''}`;
+      btn.className = `settings-btn ${state.theme === mode ? 'active' : ''}`;
       btn.textContent = t(labelKey);
 
       btn.addEventListener('click', () => {
         if (state.theme === mode) return;
         setTheme(mode);
         render();
-        themeButtons.querySelector('.section-btn.active')?.focus();
+        themeRow.buttons.querySelector('.settings-btn.active')?.focus();
       });
 
-      themeButtons.appendChild(btn);
+      themeRow.buttons.appendChild(btn);
     });
   };
 
@@ -289,6 +301,7 @@ export function openShortcutsHelp() {
     document.removeEventListener("keydown", onKeydown, true);
     overlay.removeEventListener("helpClose", close);
     overlay.classList.add("fade-out");
+
     const remove = () => {
       overlay.remove();
       if (previouslyFocused && typeof previouslyFocused.focus === "function") {
@@ -324,10 +337,12 @@ export function openShortcutsHelp() {
     localStorage.removeItem(STORAGE_KEYS.TUTORIAL_SEEN);
     startTutorial();
   });
+
   closeBtn.addEventListener("click", close);
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) close();
   });
+
   overlay.addEventListener("helpClose", close);
   document.addEventListener("keydown", onKeydown, true);
 

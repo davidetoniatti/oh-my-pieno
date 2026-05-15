@@ -130,7 +130,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		// default-src 'none' provides a secure baseline.
 		// style-src 'unsafe-inline' is required for Leaflet dynamic marker coloring.
 		// img-src data: is required for Leaflet marker shadow/assets.
-		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self' unpkg.com; style-src 'self' unpkg.com fonts.googleapis.com 'unsafe-inline'; font-src fonts.gstatic.com; img-src 'self' *.tile.openstreetmap.org unpkg.com data:; connect-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self';")
+		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self' unpkg.com; style-src 'self' unpkg.com fonts.googleapis.com 'unsafe-inline'; font-src fonts.gstatic.com; img-src 'self' *.tile.openstreetmap.org unpkg.com data:; connect-src 'self' unpkg.com; manifest-src 'self'; base-uri 'self'; form-action 'self';")
 		next.ServeHTTP(w, r)
 	})
 }

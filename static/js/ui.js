@@ -1,11 +1,14 @@
-import { state, isFavorite, toggleFavorite } from "./state.js";
+import { state, isFavorite } from "./state.js";
 import { t } from "./i18n.js";
 import { escapeHtml, timeAgo, getDistance } from "./formatters.js";
-import { openStationById, closePanel, refreshBrandOptions } from "./panels.js";
-import { refreshTutorialIfActive } from "./tutorial.js";
-import { refreshSettingsModalIfActive } from "./keyboard.js";
-import { TIMEOUTS } from "./constants.js";
+import { TIMEOUTS, BRAND_CONFIG, STORAGE_KEYS } from "./constants.js";
 import { elements, isMobileView } from "./dom.js";
+
+const refreshCallbacks = new Set();
+
+export function registerRefreshCallback(cb) {
+  refreshCallbacks.add(cb);
+}
 
 export function updateUILanguage() {
   document.documentElement.lang = state.lang;
@@ -29,9 +32,8 @@ export function updateUILanguage() {
     renderPanel(state.currentStationData);
   }
 
-  refreshTutorialIfActive();
-  refreshSettingsModalIfActive();
   refreshBrandOptions();
+  refreshCallbacks.forEach((cb) => cb());
 }
 
 export function showToast(msg, type = "info") {
@@ -44,7 +46,6 @@ export function showToast(msg, type = "info") {
   toast.textContent = msg;
   elements.app.appendChild(toast);
 
-  // Trigger reflow so the transition plays from opacity 0
   toast.offsetHeight;
   toast.classList.add("toast--visible");
 
@@ -62,29 +63,7 @@ export function closePanelUI() {
   elements.map.classList.remove("has-selection");
 }
 
-export function toggleCollectionPanel(panel, toggleBtn, renderFn) {
-  const isHidden = panel.classList.contains("hidden");
-
-  if (isHidden) {
-    // Close other panels to avoid overlap
-    closePanel();
-    // Close other collections if they exist
-    if (panel === elements.historyPanel) {
-      if (elements.favoritesPanel) closeCollectionPanel(elements.favoritesPanel, elements.favoritesToggle);
-    } else if (elements.favoritesPanel && panel === elements.favoritesPanel) {
-      closeCollectionPanel(elements.historyPanel, elements.historyToggle);
-    }
-
-    renderFn();
-    panel.classList.remove("hidden");
-    if (isMobileView()) panel.classList.add("peek");
-    toggleBtn.classList.add("active");
-  } else {
-    closeCollectionPanel(panel, toggleBtn);
-  }
-}
-
-export function closeCollectionPanel(panel, toggleBtn) {
+export function closeCollectionPanelUI(panel, toggleBtn) {
   panel.classList.add("hidden");
   panel.classList.remove("peek", "full");
   if (toggleBtn) toggleBtn.classList.remove("active");
@@ -92,13 +71,9 @@ export function closeCollectionPanel(panel, toggleBtn) {
 
 export function bindCollectionEvents(listEl, onSelect) {
   listEl.addEventListener("click", (e) => {
-    // Let the Open-in-Maps link handle its own click without reopening the
-    // station in the background.
     if (e.target.closest(".station-map-link")) return;
-
     const item = e.target.closest(".station-item");
     if (!item) return;
-
     const id = String(item.dataset.id);
     onSelect(id);
   });
@@ -169,7 +144,6 @@ function renderContactRow(labelKey, value, hrefPrefix = "") {
   const escaped = escapeHtml(value);
   let finalHref = hrefPrefix + escaped;
 
-  // Normalize website links
   if (labelKey === "web" && !value.startsWith("http")) {
     finalHref = "https://" + value;
   }
@@ -187,9 +161,6 @@ function renderContactRow(labelKey, value, hrefPrefix = "") {
 }
 
 export function renderPanel(station) {
-  // A zone-switch triggered by openStationById runs performSearch, which
-  // hides the panel as a side-effect. Re-open it here so rendering a station
-  // always results in a visible panel.
   const wasHidden = elements.panel.classList.contains("hidden");
   elements.panel.classList.remove("hidden");
   if (wasHidden && isMobileView()) {
@@ -283,4 +254,88 @@ export function renderPanel(station) {
       ${station.company ? `<div class="footer-row"><span class="footer-label">${t("company")}:</span> ${escapeHtml(station.company)}</div>` : ""}
     </div>
   `;
+}
+
+export function refreshBrandOptions() {
+  const counts = new Map();
+  let bucketCount = 0;
+
+  for (const station of state.stationsById.values()) {
+    const brand = (station.brand || "").trim();
+    if (!brand || brand === BRAND_CONFIG.BUCKET) {
+      bucketCount++;
+      continue;
+    }
+    counts.set(brand, (counts.get(brand) ?? 0) + 1);
+  }
+
+  const sorted = [...counts.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  const topEntries = sorted.slice(0, BRAND_CONFIG.TOP_N);
+  for (const [, n] of sorted.slice(BRAND_CONFIG.TOP_N)) bucketCount += n;
+
+  state.topBrands = new Set(topEntries.map(([name]) => name));
+
+  const displayNames = topEntries.map(([name]) => name);
+  if (bucketCount > 0) displayNames.push(BRAND_CONFIG.BUCKET);
+
+  const selected = state.selectedBrand;
+  const selectionInZone =
+    selected &&
+    (counts.has(selected) ||
+      (selected === BRAND_CONFIG.BUCKET && bucketCount > 0));
+  if (selected && !displayNames.includes(selected)) {
+    displayNames.push(selected);
+  }
+
+  displayNames.sort((a, b) => a.localeCompare(b));
+
+  const select = elements.brandSelect;
+  select.innerHTML = "";
+
+  const allOpt = document.createElement("option");
+  allOpt.value = "";
+  allOpt.textContent = t("brand_all");
+  allOpt.setAttribute("data-i18n", "brand_all");
+  select.appendChild(allOpt);
+
+  for (const name of displayNames) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    if (name === selected && !selectionInZone) {
+      opt.textContent = `${name} (${t("brand_not_in_area")})`;
+      opt.disabled = true;
+    } else {
+      opt.textContent = name;
+    }
+    select.appendChild(opt);
+  }
+
+  select.value = selected ?? "";
+}
+
+export function applyThemeByMode(mode) {
+  let activeTheme = mode;
+  if (mode === "device") {
+    activeTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
+
+  document.documentElement.setAttribute("data-theme", activeTheme);
+  document.documentElement.setAttribute("data-theme-mode", mode);
+}
+
+export function setTheme(mode) {
+  state.theme = mode;
+  localStorage.setItem(STORAGE_KEYS.THEME, mode);
+  applyThemeByMode(mode);
+}
+
+export function toggleTheme() {
+  const modes = ["device", "dark", "light"];
+  const currentIndex = modes.indexOf(state.theme);
+  const nextIndex = (currentIndex + 1) % modes.length;
+  setTheme(modes[nextIndex]);
 }

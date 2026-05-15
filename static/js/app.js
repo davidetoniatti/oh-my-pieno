@@ -1,33 +1,30 @@
 import { state, getStateFromURL, updateURL, toggleFavorite } from "./state.js";
 import { hasLocale, t } from "./i18n.js";
-import {
-  geocodeAddress,
-} from "./api.js";
-import {
-  initMap,
-  syncMarkers,
-  selectMarker,
-  setUserLocationMarker,
-} from "./map.js";
+import { geocodeAddress } from "./api.js";
+import { initMap, syncMarkers, selectMarker, setUserLocationMarker } from "./map.js";
 import {
   updateUILanguage,
-  renderPanel,
   showToast,
   bindCollectionEvents,
+  setTheme,
+  applyThemeByMode,
+  toggleTheme,
+  renderStationList,
+  refreshBrandOptions,
 } from "./ui.js";
 import {
-  closePanel,
   toggleHistoryPanel,
   toggleFavoritesPanel,
+  closePanel,
   closeHistoryPanel,
   closeFavoritesPanel,
-  refreshBrandOptions,
   performSearch,
   openStationById,
   resetSearchUI,
 } from "./panels.js";
 import { Sheet } from "./Sheet.js";
-import { bindKeyboardShortcuts, openSettingsModal } from "./keyboard.js";
+import { bindKeyboardShortcuts } from "./keyboard.js";
+import { openSettingsModal } from "./settings.js";
 import {
   TIMEOUTS,
   MAP_CONFIG,
@@ -51,7 +48,6 @@ async function bootstrapApp() {
   const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) || "device";
   setTheme(savedTheme);
 
-  // Listen for live system theme changes
   window
     .matchMedia("(prefers-color-scheme: dark)")
     .addEventListener("change", () => {
@@ -60,7 +56,6 @@ async function bootstrapApp() {
       }
     });
 
-  // Responsive Controls Slots
   const mq = window.matchMedia("(max-width: 900px)");
   const placeControls = (e) => {
     if (e.matches) {
@@ -101,7 +96,6 @@ async function bootstrapApp() {
   new Sheet("favoritesPanel", "bottom");
   new Sheet("controls", "top");
 
-  // If no location in URL, try geolocating
   if (!urlState.lat && !urlState.lng && navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -112,7 +106,6 @@ async function bootstrapApp() {
         performSearch(latitude, longitude);
       },
       () => {
-        // Fallback to default search if geo fails
         performSearch(startLat, startLng);
       },
       { timeout: TIMEOUTS.GEO_MS },
@@ -120,93 +113,6 @@ async function bootstrapApp() {
   } else {
     performSearch(startLat, startLng);
   }
-}
-
-export function setTheme(mode) {
-  state.theme = mode;
-  localStorage.setItem(STORAGE_KEYS.THEME, mode);
-  applyThemeByMode(mode);
-}
-
-export function applyThemeByMode(mode) {
-  let activeTheme = mode;
-  if (mode === "device") {
-    activeTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
-  }
-
-  document.documentElement.setAttribute("data-theme", activeTheme);
-  document.documentElement.setAttribute("data-theme-mode", mode);
-}
-
-export function toggleTheme() {
-  const modes = ["device", "dark", "light"];
-  const currentIndex = modes.indexOf(state.theme);
-  const nextIndex = (currentIndex + 1) % modes.length;
-  setTheme(modes[nextIndex]);
-}
-
-export function refreshBrandOptions() {
-  const counts = new Map();
-  let bucketCount = 0;
-
-  for (const station of state.stationsById.values()) {
-    const brand = (station.brand || "").trim();
-    if (!brand || brand === BRAND_CONFIG.BUCKET) {
-      bucketCount++;
-      continue;
-    }
-    counts.set(brand, (counts.get(brand) ?? 0) + 1);
-  }
-
-  const sorted = [...counts.entries()].sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
-  const topEntries = sorted.slice(0, BRAND_CONFIG.TOP_N);
-  for (const [, n] of sorted.slice(BRAND_CONFIG.TOP_N)) bucketCount += n;
-
-  state.topBrands = new Set(topEntries.map(([name]) => name));
-
-  const displayNames = topEntries.map(([name]) => name);
-  if (bucketCount > 0) displayNames.push(BRAND_CONFIG.BUCKET);
-
-  // The selected brand may be a tail brand (present in the zone but outside
-  // top N) or absent from the zone entirely. Either way, ensure it stays
-  // visible in the dropdown so the user can see what they've filtered on.
-  const selected = state.selectedBrand;
-  const selectionInZone =
-    selected &&
-    (counts.has(selected) ||
-      (selected === BRAND_CONFIG.BUCKET && bucketCount > 0));
-  if (selected && !displayNames.includes(selected)) {
-    displayNames.push(selected);
-  }
-
-  displayNames.sort((a, b) => a.localeCompare(b));
-
-  const select = elements.brandSelect;
-  select.innerHTML = "";
-
-  const allOpt = document.createElement("option");
-  allOpt.value = "";
-  allOpt.textContent = t("brand_all");
-  allOpt.setAttribute("data-i18n", "brand_all");
-  select.appendChild(allOpt);
-
-  for (const name of displayNames) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    if (name === selected && !selectionInZone) {
-      opt.textContent = `${name} (${t("brand_not_in_area")})`;
-      opt.disabled = true;
-    } else {
-      opt.textContent = name;
-    }
-    select.appendChild(opt);
-  }
-
-  select.value = selected ?? "";
 }
 
 function bindBrandSelect() {
@@ -285,7 +191,6 @@ function bindControls() {
       const svg = favBtn.querySelector("svg");
       svg.setAttribute("fill", isFav ? "currentColor" : "none");
 
-      // Refresh favorites list if it's open
       if (!elements.favoritesPanel.classList.contains("hidden")) {
         renderStationList(state.favorites, elements.favoritesList, "no_favorites");
       }
@@ -310,22 +215,11 @@ function bindControls() {
     performSearch(c.lat, c.lng);
   });
 
-  elements.panelClose.addEventListener("click", closePanel);
-  elements.historyPanelClose.addEventListener("click", closeHistoryPanel);
-  elements.favoritesPanelClose.addEventListener("click", closeFavoritesPanel);
-
   elements.helpBtn?.addEventListener("click", () => {
     openSettingsModal();
   });
 
   bindAddressSearch();
-}
-
-function resetSearchUI() {
-  closePanel();
-  closeHistoryPanel();
-  closeFavoritesPanel();
-  elements.searchSuggestions.classList.add("hidden");
 }
 
 function bindAddressSearch() {

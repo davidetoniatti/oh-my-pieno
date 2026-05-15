@@ -12,11 +12,11 @@ import {
 } from "./map.js";
 import {
   closePanelUI,
-  toggleCollectionPanel,
-  closeCollectionPanel,
+  closeCollectionPanelUI,
   renderPanel,
   showToast,
   renderStationList,
+  refreshBrandOptions,
 } from "./ui.js";
 import { checkTutorial } from "./tutorial.js";
 import {
@@ -32,6 +32,26 @@ export function closePanel() {
   selectMarker(null);
 }
 
+export function toggleCollectionPanel(panel, toggleBtn, renderFn) {
+  const isHidden = panel.classList.contains("hidden");
+
+  if (isHidden) {
+    closePanel();
+    if (panel === elements.historyPanel) {
+      closeCollectionPanelUI(elements.favoritesPanel, elements.favoritesToggle);
+    } else if (panel === elements.favoritesPanel) {
+      closeCollectionPanelUI(elements.historyPanel, elements.historyToggle);
+    }
+
+    renderFn();
+    panel.classList.remove("hidden");
+    if (isMobileView()) panel.classList.add("peek");
+    toggleBtn.classList.add("active");
+  } else {
+    closeCollectionPanelUI(panel, toggleBtn);
+  }
+}
+
 export function toggleHistoryPanel() {
   toggleCollectionPanel(elements.historyPanel, elements.historyToggle, () => {
     renderStationList(state.history, elements.historyList, "no_history");
@@ -45,70 +65,11 @@ export function toggleFavoritesPanel() {
 }
 
 export function closeHistoryPanel() {
-  closeCollectionPanel(elements.historyPanel, elements.historyToggle);
+  closeCollectionPanelUI(elements.historyPanel, elements.historyToggle);
 }
 
 export function closeFavoritesPanel() {
-  closeCollectionPanel(elements.favoritesPanel, elements.favoritesToggle);
-}
-
-export function refreshBrandOptions() {
-  const counts = new Map();
-  let bucketCount = 0;
-
-  for (const station of state.stationsById.values()) {
-    const brand = (station.brand || "").trim();
-    if (!brand || brand === BRAND_CONFIG.BUCKET) {
-      bucketCount++;
-      continue;
-    }
-    counts.set(brand, (counts.get(brand) ?? 0) + 1);
-  }
-
-  const sorted = [...counts.entries()].sort(
-    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
-  );
-  const topEntries = sorted.slice(0, BRAND_CONFIG.TOP_N);
-  for (const [, n] of sorted.slice(BRAND_CONFIG.TOP_N)) bucketCount += n;
-
-  state.topBrands = new Set(topEntries.map(([name]) => name));
-
-  const displayNames = topEntries.map(([name]) => name);
-  if (bucketCount > 0) displayNames.push(BRAND_CONFIG.BUCKET);
-
-  const selected = state.selectedBrand;
-  const selectionInZone =
-    selected &&
-    (counts.has(selected) ||
-      (selected === BRAND_CONFIG.BUCKET && bucketCount > 0));
-  if (selected && !displayNames.includes(selected)) {
-    displayNames.push(selected);
-  }
-
-  displayNames.sort((a, b) => a.localeCompare(b));
-
-  const select = elements.brandSelect;
-  select.innerHTML = "";
-
-  const allOpt = document.createElement("option");
-  allOpt.value = "";
-  allOpt.textContent = t("brand_all");
-  allOpt.setAttribute("data-i18n", "brand_all");
-  select.appendChild(allOpt);
-
-  for (const name of displayNames) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    if (name === selected && !selectionInZone) {
-      opt.textContent = `${name} (${t("brand_not_in_area")})`;
-      opt.disabled = true;
-    } else {
-      opt.textContent = name;
-    }
-    select.appendChild(opt);
-  }
-
-  select.value = selected ?? "";
+  closeCollectionPanelUI(elements.favoritesPanel, elements.favoritesToggle);
 }
 
 export async function performSearch(lat, lng) {

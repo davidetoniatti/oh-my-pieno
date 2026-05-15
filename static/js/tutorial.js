@@ -1,5 +1,6 @@
 import { t } from "./i18n.js";
 import { TUTORIAL_STEPS, STORAGE_KEYS, BREAKPOINTS } from "./constants.js";
+import { registerRefreshCallback } from "./ui.js";
 
 const FOCUSABLE_SELECTOR = 'button, [href], [tabindex]:not([tabindex="-1"])';
 
@@ -7,13 +8,13 @@ const FOCUSABLE_SELECTOR = 'button, [href], [tabindex]:not([tabindex="-1"])';
 // so language changes during the tutorial re-render its strings in place.
 let activeRefresh = null;
 
+registerRefreshCallback(() => {
+  if (activeRefresh) activeRefresh();
+});
+
 export function checkTutorial() {
   if (localStorage.getItem(STORAGE_KEYS.TUTORIAL_SEEN) === "true") return;
   startTutorial();
-}
-
-export function refreshTutorialIfActive() {
-  if (activeRefresh) activeRefresh();
 }
 
 export function startTutorial() {

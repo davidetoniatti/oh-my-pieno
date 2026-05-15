@@ -99,7 +99,6 @@ func (s *Server) calculateSelectedPrice(station *models.GasStation, fuelID int) 
 
 func (s *Server) isFuelMatch(f models.Fuel, fuelID int) bool {
 	// We use the FuelID provided by the upstream API to match exactly.
-	// Map our internal constants to the FuelID in the Fuel struct.
 	return f.FuelID == fuelID
 }
 
@@ -115,7 +114,7 @@ func (s *Server) StationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 {
+	if err != nil || id <= 0 || id > 1000000 {
 		s.handleError(w, NewAppError(http.StatusBadRequest, "invalid station id", err))
 		return
 	}
@@ -150,6 +149,10 @@ func (s *Server) GeocodeHandler(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		s.handleError(w, NewAppError(http.StatusBadRequest, "query required", nil))
+		return
+	}
+	if len(q) > 200 {
+		s.handleError(w, NewAppError(http.StatusBadRequest, "query too long", nil))
 		return
 	}
 

@@ -239,7 +239,11 @@ function bindBrandSelect() {
 function loadFuels(defaultFuelId) {
   state.fuels = FUELS;
   elements.fuelSelect.innerHTML = state.fuels
-    .map((f) => `<option value="${f.id}">${f.name}</option>`)
+    .map((f) => {
+      const label = t(`fuel_${f.name.toLowerCase()}`);
+      const name = label.startsWith("fuel_") ? f.name : label;
+      return `<option value="${f.id}">${name}</option>`;
+    })
     .join("");
 
   const validDefault =

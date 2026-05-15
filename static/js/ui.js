@@ -142,12 +142,14 @@ export function renderStationList(items, listEl, emptyKey) {
 }
 
 function renderFuelRow(name, selfPrice, servedPrice) {
+  const label = t(`fuel_${name.toLowerCase()}`);
+  const displayName = label.startsWith("fuel_") ? name : label;
   const selfText = selfPrice !== Infinity ? selfPrice.toFixed(3) : "--.---";
   const servedText =
     servedPrice !== Infinity ? servedPrice.toFixed(3) : "--.---";
   return `
     <div class="fuel-row">
-      <span class="fuel-name">${escapeHtml(name)}</span>
+      <span class="fuel-name">${escapeHtml(displayName)}</span>
       <div class="fuel-prices-combined">
         <div class="price-group">
           <span class="price-label">${t("price_self")}</span>

@@ -86,6 +86,8 @@ export const translations = {
     theme_system: 'System',
     theme_dark: 'Dark',
     theme_light: 'Light',
+    fuel_benzina: "Petrol",
+    fuel_gasolio: "Diesel",
   },
   it: {
     title: "OhMyPieno",

@@ -3,6 +3,8 @@ export const STORAGE_KEYS = {
   THEME: "ohmypieno_theme",
   HISTORY: "ohmypieno_history",
   FAVORITES: "ohmypieno_favorites",
+  LANG: "ohmypieno_lang",
+  FUEL: "ohmypieno_fuel",
 };
 
 export const BREAKPOINTS = {

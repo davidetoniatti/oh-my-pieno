@@ -300,6 +300,7 @@ export function openSettingsModal() {
       btn.addEventListener("click", () => {
         if (state.lang === code) return;
         state.lang = code;
+        localStorage.setItem(STORAGE_KEYS.LANG, code);
         updateUILanguage();
         updateURL();
         languageRow.buttons.querySelector(".settings-btn.active")?.focus();

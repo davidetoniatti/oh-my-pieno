@@ -63,8 +63,13 @@ export function closeFavoritesPanel() {
 }
 
 async function bootstrapApp() {
-  const browserLang = navigator.language.split("-")[0];
-  if (hasLocale(browserLang)) state.lang = browserLang;
+  const savedLang = localStorage.getItem(STORAGE_KEYS.LANG);
+  if (savedLang && hasLocale(savedLang)) {
+    state.lang = savedLang;
+  } else {
+    const browserLang = navigator.language.split("-")[0];
+    if (hasLocale(browserLang)) state.lang = browserLang;
+  }
 
   const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) || "device";
   setTheme(savedTheme);
@@ -236,7 +241,7 @@ function bindBrandSelect() {
   });
 }
 
-function loadFuels(defaultFuelId) {
+function loadFuels(urlFuelId) {
   state.fuels = FUELS;
   elements.fuelSelect.innerHTML = state.fuels
     .map((f) => {
@@ -246,14 +251,18 @@ function loadFuels(defaultFuelId) {
     })
     .join("");
 
+  const savedFuel = parseInt(localStorage.getItem(STORAGE_KEYS.FUEL), 10);
+  const defaultFuelId = urlFuelId || savedFuel;
+
   const validDefault =
     defaultFuelId && state.fuels.some((f) => f.id === defaultFuelId);
   state.selectedFuelId = validDefault ? defaultFuelId : state.fuels[0]?.id || 1;
   elements.fuelSelect.value = state.selectedFuelId;
-  if (!validDefault) updateURL();
+  if (!urlFuelId && !validDefault) updateURL();
 
   elements.fuelSelect.addEventListener("change", () => {
     state.selectedFuelId = parseInt(elements.fuelSelect.value);
+    localStorage.setItem(STORAGE_KEYS.FUEL, state.selectedFuelId);
     const c = state.map.getCenter();
     performSearch(c.lat, c.lng);
     updateURL();

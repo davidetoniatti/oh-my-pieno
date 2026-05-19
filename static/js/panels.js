@@ -131,11 +131,11 @@ function resolveStationLocation(station, knownLocation) {
   );
 }
 
-async function ensureStationVisible(station, forceSearch) {
+async function ensureStationVisible(station) {
   const sId = String(station.id);
   if (!station.location) return;
 
-  if (forceSearch || !state.markers.has(sId)) {
+  if (!state.markers.has(sId)) {
     const zoom = Math.max(state.map.getZoom(), MAP_CONFIG.DEFAULT_ZOOM);
     state.map.setView([station.location.lat, station.location.lng], zoom, {
       animate: false,
@@ -168,7 +168,6 @@ function focusMapOnStation(station) {
 export async function openStationById(
   id,
   knownLocation = null,
-  forceSearch = false,
 ) {
   const sId = String(id);
   selectMarker(sId);
@@ -183,7 +182,7 @@ export async function openStationById(
     station.location = resolveStationLocation(station, knownLocation);
 
     addToHistory(station);
-    await ensureStationVisible(station, forceSearch);
+    await ensureStationVisible(station);
 
     state.currentStationData = station;
     focusMapOnStation(station);

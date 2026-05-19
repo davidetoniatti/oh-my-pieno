@@ -174,6 +174,11 @@ export const translations = {
     theme_system: 'Sistema',
     theme_dark: 'Scuro',
     theme_light: 'Chiaro',
+    fuel_benzina: "Benzina",
+    fuel_gasolio: "Gasolio",
+    fuel_gpl: "GPL",
+    fuel_metano: "Metano",
+    fuel_hvo: "HVO",
   },
 };
 

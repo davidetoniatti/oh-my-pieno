@@ -105,6 +105,7 @@ export function fetchStationDetails(id) {
     return activeDetails.get(stationId);
   }
 
+  // Abort any previous details fetch. Only the latest selection matters.
   state.requests.detailAbortController?.abort();
   state.requests.detailAbortController = new AbortController();
 

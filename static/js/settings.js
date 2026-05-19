@@ -1,12 +1,12 @@
 import { state, updateURL } from "./state.js";
 import { t, translations } from "./i18n.js";
-import { updateUILanguage, setTheme, toggleTheme, registerRefreshCallback } from "./ui.js";
+import { updateUILanguage, setTheme, toggleTheme } from "./ui.js";
 import { startTutorial } from "./tutorial.js";
 import { closePanel, toggleHistoryPanel, toggleFavoritesPanel } from "./panels.js";
 import { STORAGE_KEYS } from "./constants.js";
 import { elements } from "./dom.js";
-
-const FOCUSABLE_SELECTOR = 'button, [href], [tabindex]:not([tabindex="-1"])';
+import { createModal } from "./modal.js";
+import { appEvents, APP_EVENT_TYPES } from "./events.js";
 
 const LANGUAGE_NATIVE = {
   en: "English",
@@ -18,12 +18,6 @@ const THEME_LABELS = {
   dark: "theme_dark",
   light: "theme_light",
 };
-
-let activeSettingsRefresh = null;
-
-registerRefreshCallback(() => {
-  if (activeSettingsRefresh) activeSettingsRefresh();
-});
 
 function createSettingsRow(labelText) {
   const row = document.createElement("div");
@@ -62,21 +56,6 @@ const SHORTCUTS = [
 export function openSettingsModal() {
   if (document.getElementById("settings-overlay")) return;
 
-  const previouslyFocused = document.activeElement;
-
-  const overlay = document.createElement("div");
-  overlay.id = "settings-overlay";
-
-  const modal = document.createElement("div");
-  modal.className = "tutorial-modal settings-modal";
-  modal.setAttribute("role", "dialog");
-  modal.setAttribute("aria-modal", "true");
-  modal.setAttribute("aria-labelledby", "settings-title");
-  modal.tabIndex = -1;
-
-  const heading = document.createElement("h2");
-  heading.id = "settings-title";
-
   const preferencesTitle = createGroupTitle("preferences_title");
   const settingsSection = document.createElement("div");
   settingsSection.className = "settings-section";
@@ -105,6 +84,22 @@ export function openSettingsModal() {
   closeBtn.className = "btn-primary";
 
   actions.append(replayBtn, spacer, closeBtn);
+
+  const { modal, close } = createModal({
+    id: "settings-overlay",
+    ariaLabel: "settings-title",
+    className: "settings-modal",
+    onClose: () => {
+      appEvents.removeEventListener(APP_EVENT_TYPES.LANGUAGE_CHANGE, render);
+      overlay.removeEventListener("settingsClose", close);
+    }
+  });
+
+  const overlay = document.getElementById("settings-overlay");
+
+  const heading = document.createElement("h2");
+  heading.id = "settings-title";
+
   modal.append(
     heading,
     preferencesTitle,
@@ -113,8 +108,6 @@ export function openSettingsModal() {
     list,
     actions,
   );
-  overlay.append(modal);
-  document.body.appendChild(overlay);
 
   const render = () => {
     heading.textContent = t("settings_title");
@@ -182,44 +175,8 @@ export function openSettingsModal() {
     });
   };
 
-  activeSettingsRefresh = render;
+  appEvents.addEventListener(APP_EVENT_TYPES.LANGUAGE_CHANGE, render);
   render();
-
-  const close = () => {
-    activeSettingsRefresh = null;
-    document.removeEventListener("keydown", onKeydown, true);
-    overlay.removeEventListener("settingsClose", close);
-    overlay.classList.add("fade-out");
-
-    const remove = () => {
-      overlay.remove();
-      if (previouslyFocused && typeof previouslyFocused.focus === "function") {
-        previouslyFocused.focus();
-      }
-    };
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      remove();
-    } else {
-      overlay.addEventListener("transitionend", remove, { once: true });
-    }
-  };
-
-  const onKeydown = (e) => {
-    if (!overlay.isConnected) return;
-    if (e.key === "Tab") {
-      const focusables = Array.from(modal.querySelectorAll(FOCUSABLE_SELECTOR));
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  };
 
   replayBtn.addEventListener("click", () => {
     close();
@@ -228,12 +185,7 @@ export function openSettingsModal() {
   });
 
   closeBtn.addEventListener("click", close);
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) close();
-  });
-
   overlay.addEventListener("settingsClose", close);
-  document.addEventListener("keydown", onKeydown, true);
 
   closeBtn.focus();
 }

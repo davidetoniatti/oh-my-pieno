@@ -4,11 +4,7 @@ import { escapeHtml, timeAgo, getDistance } from "./formatters.js";
 import { TIMEOUTS, BRAND_CONFIG, STORAGE_KEYS } from "./constants.js";
 import { elements, isMobileView } from "./dom.js";
 
-const refreshCallbacks = new Set();
-
-export function registerRefreshCallback(cb) {
-  refreshCallbacks.add(cb);
-}
+import { appEvents, APP_EVENT_TYPES } from "./events.js";
 
 export function updateUILanguage() {
   document.documentElement.lang = state.lang;
@@ -33,7 +29,7 @@ export function updateUILanguage() {
   }
 
   refreshBrandOptions();
-  refreshCallbacks.forEach((cb) => cb());
+  appEvents.dispatchEvent(new Event(APP_EVENT_TYPES.LANGUAGE_CHANGE));
 }
 
 export function showToast(msg, type = "info") {

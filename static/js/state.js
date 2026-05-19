@@ -15,7 +15,6 @@ export const state = {
   map: null,
   markers: new Map(),
   stationsById: new Map(),
-  fuels: [],
   selectedFuelId: null,
   selectedBrand: null,
   topBrands: new Set(),

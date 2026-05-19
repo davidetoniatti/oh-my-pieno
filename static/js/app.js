@@ -67,6 +67,13 @@ async function bootstrapApp() {
   placeControls(mq);
   mq.addEventListener("change", placeControls);
 
+  const syncTopbarHeight = () => {
+    const h = elements.topbar.offsetHeight;
+    document.documentElement.style.setProperty("--topbar-h", `${h}px`);
+  };
+  syncTopbarHeight();
+  window.addEventListener("resize", syncTopbarHeight);
+
   updateUILanguage();
 
   const urlState = getStateFromURL();
@@ -86,7 +93,7 @@ async function bootstrapApp() {
 
   loadFuels(urlState.fuel);
   if (urlState.brand) state.selectedBrand = urlState.brand;
-  bindBrandSelect();
+  
   bindControls();
   bindCollectionEvents(elements.historyList, openStationById);
   bindCollectionEvents(elements.favoritesList, openStationById);
@@ -115,18 +122,8 @@ async function bootstrapApp() {
   }
 }
 
-function bindBrandSelect() {
-  elements.brandSelect.addEventListener("change", () => {
-    const v = elements.brandSelect.value;
-    state.selectedBrand = v === "" ? null : v;
-    syncMarkers();
-    updateURL();
-  });
-}
-
 function loadFuels(urlFuelId) {
-  state.fuels = FUELS;
-  elements.fuelSelect.innerHTML = state.fuels
+  elements.fuelSelect.innerHTML = FUELS
     .map((f) => {
       const label = t(`fuel_${f.name.toLowerCase()}`);
       const name = label.startsWith("fuel_") ? f.name : label;
@@ -138,11 +135,13 @@ function loadFuels(urlFuelId) {
   const defaultFuelId = urlFuelId || savedFuel;
 
   const validDefault =
-    defaultFuelId && state.fuels.some((f) => f.id === defaultFuelId);
-  state.selectedFuelId = validDefault ? defaultFuelId : state.fuels[0]?.id || 1;
+    defaultFuelId && FUELS.some((f) => f.id === defaultFuelId);
+  state.selectedFuelId = validDefault ? defaultFuelId : FUELS[0]?.id || 1;
   elements.fuelSelect.value = state.selectedFuelId;
   if (!urlFuelId && !validDefault) updateURL();
+}
 
+function bindControls() {
   elements.fuelSelect.addEventListener("change", () => {
     state.selectedFuelId = parseInt(elements.fuelSelect.value);
     localStorage.setItem(STORAGE_KEYS.FUEL, state.selectedFuelId);
@@ -150,9 +149,14 @@ function loadFuels(urlFuelId) {
     performSearch(c.lat, c.lng);
     updateURL();
   });
-}
 
-function bindControls() {
+  elements.brandSelect.addEventListener("change", () => {
+    const v = elements.brandSelect.value;
+    state.selectedBrand = v === "" ? null : v;
+    syncMarkers();
+    updateURL();
+  });
+
   elements.radiusSelect.addEventListener("change", (e) => {
     state.radius = parseInt(e.target.value);
     const c = state.map.getCenter();
@@ -258,7 +262,7 @@ function bindAddressSearch() {
 
   const doSearch = async () => {
     const query = addressInput.value.trim();
-    if (!query) return;
+    if (query.length < SEARCH_CONFIG.MIN_ADDRESS_LENGTH) return;
     resetSearchUI();
     try {
       const data = await geocodeAddress(query, state.lang);

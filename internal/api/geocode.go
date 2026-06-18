@@ -3,15 +3,30 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
 
 	"golang.org/x/sync/singleflight"
+	"golang.org/x/time/rate"
 
 	"ohmypieno/internal/cache"
 	"ohmypieno/internal/obs"
+)
+
+// ErrRateLimited signals the Nominatim budget is exhausted; distinct from
+// upstream failures so the HTTP layer can map it to 429 rather than 502.
+var ErrRateLimited = errors.New("geocoding rate limit exceeded")
+
+// Nominatim's usage policy caps a single application at ~1 req/s, so we keep a
+// global bucket regardless of user count.
+const (
+	nominatimRatePerSec = 1
+	nominatimRateBurst  = 2
+	maxNominatimBytes   = 1 << 20 // 1 MiB
 )
 
 type Geocoder interface {
@@ -21,6 +36,7 @@ type Geocoder interface {
 type NominatimClient struct {
 	HTTPClient *http.Client
 	Cache      *cache.Cache[[]any]
+	limiter    *rate.Limiter
 	sfGroup    singleflight.Group
 }
 
@@ -29,7 +45,8 @@ func NewNominatimClient(c *cache.Cache[[]any]) *NominatimClient {
 		HTTPClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		Cache: c,
+		Cache:   c,
+		limiter: rate.NewLimiter(nominatimRatePerSec, nominatimRateBurst),
 	}
 }
 
@@ -53,7 +70,13 @@ func (c *NominatimClient) Geocode(ctx context.Context, query, lang string) (any,
 	}
 
 	ch := c.sfGroup.DoChan(cacheKey, func() (any, error) {
-		// Increase limit to 5 to support suggestions
+		// Gate only the outbound call: cache hits and coalesced duplicates
+		// never reach here, so they don't consume the Nominatim budget.
+		if !c.limiter.Allow() {
+			return nil, ErrRateLimited
+		}
+
+		// limit=5 to support suggestions.
 		u := fmt.Sprintf("https://nominatim.openstreetmap.org/search?format=json&q=%s&countrycodes=it&limit=5",
 			url.QueryEscape(query))
 
@@ -82,7 +105,7 @@ func (c *NominatimClient) Geocode(ctx context.Context, query, lang string) (any,
 		}
 
 		var results []any
-		if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+		if err := json.NewDecoder(io.LimitReader(resp.Body, maxNominatimBytes)).Decode(&results); err != nil {
 			return nil, err
 		}
 

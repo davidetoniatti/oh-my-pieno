@@ -37,10 +37,12 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		BaseURL:      baseURL,
-		Port:         port,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		BaseURL:     baseURL,
+		Port:        port,
+		ReadTimeout: 5 * time.Second,
+		// Must exceed the longest upstream client timeout (stations: 15s) or a
+		// slow MIMIT reply gets truncated by the write deadline.
+		WriteTimeout: 20 * time.Second,
 		IdleTimeout:  120 * time.Second,
 
 		LatMin:    35.0,

@@ -17,16 +17,16 @@ type Fuel struct {
 }
 
 type GasStation struct {
-	ID               int             `json:"id"`
-	Name             string          `json:"name"`
-	Fuels            []Fuel          `json:"fuels"`
-	Location         *Location       `json:"location,omitempty"`
-	InsertDate       string          `json:"insertDate,omitempty"`
-	Address          *string         `json:"address"`
-	Brand            string          `json:"brand"`
-	Distance         string          `json:"distance,omitempty"`
-	PhoneNumber      string          `json:"phoneNumber,omitempty"`
-	Email            string          `json:"email,omitempty"`
+	ID               int       `json:"id"`
+	Name             string    `json:"name"`
+	Fuels            []Fuel    `json:"fuels"`
+	Location         *Location `json:"location,omitempty"`
+	InsertDate       string    `json:"insertDate,omitempty"`
+	Address          *string   `json:"address"`
+	Brand            string    `json:"brand"`
+	Distance         string    `json:"distance,omitempty"`
+	PhoneNumber      string    `json:"phoneNumber,omitempty"`
+	Email            string    `json:"email,omitempty"`
 	Website          string    `json:"website,omitempty"`
 	Company          string    `json:"company,omitempty"`
 	SelectedPrice    float64   `json:"selectedPrice,omitempty"`

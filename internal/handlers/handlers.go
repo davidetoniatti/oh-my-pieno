@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -10,6 +11,10 @@ import (
 	"ohmypieno/internal/api"
 	"ohmypieno/internal/models"
 )
+
+// Sanity ceiling for station ids — far above any real MIMIT id, just to
+// reject absurd input.
+const maxStationID = 100_000_000
 
 type Server struct {
 	Client   api.StationProvider
@@ -114,7 +119,7 @@ func (s *Server) StationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.Atoi(idStr)
-	if err != nil || id <= 0 || id > 1000000 {
+	if err != nil || id <= 0 || id > maxStationID {
 		s.handleError(w, NewAppError(http.StatusBadRequest, "invalid station id", err))
 		return
 	}
@@ -158,6 +163,11 @@ func (s *Server) GeocodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	results, err := s.Geocoder.Geocode(r.Context(), q, r.Header.Get("Accept-Language"))
 	if err != nil {
+		if errors.Is(err, api.ErrRateLimited) {
+			w.Header().Set("Retry-After", "1")
+			s.handleError(w, NewAppError(http.StatusTooManyRequests, "rate limit exceeded", err))
+			return
+		}
 		s.handleError(w, NewAppError(http.StatusBadGateway, "geocoding service error", err))
 		return
 	}

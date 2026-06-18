@@ -383,4 +383,24 @@ func TestStationHandler_DeepValidation(t *testing.T) {
 			t.Fatalf("expected 200, got %d", rr.Code)
 		}
 	})
+
+	t.Run("Invalid IDs rejected", func(t *testing.T) {
+		for _, id := range []string{"", "0", "-5", "abc", "100000001"} {
+			req := httptest.NewRequest("GET", "/api/station?id="+id, nil)
+			rr := httptest.NewRecorder()
+			srv.StationHandler(rr, req)
+			if rr.Code != http.StatusBadRequest {
+				t.Errorf("id=%q: expected 400, got %d", id, rr.Code)
+			}
+		}
+	})
+
+	t.Run("Large valid ID accepted", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/station?id=99999999", nil)
+		rr := httptest.NewRecorder()
+		srv.StationHandler(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("expected 200 for large-but-valid id, got %d", rr.Code)
+		}
+	})
 }

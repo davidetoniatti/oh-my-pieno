@@ -45,5 +45,7 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(appErr.Status)
-	json.NewEncoder(w).Encode(appErr)
+	if err := json.NewEncoder(w).Encode(appErr); err != nil {
+		slog.Error("error response encode failed", "error", err)
+	}
 }

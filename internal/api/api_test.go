@@ -3,12 +3,15 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	"ohmypieno/internal/cache"
 	"ohmypieno/internal/models"
@@ -110,6 +113,33 @@ func TestClient_ErrorHandling(t *testing.T) {
 	_, err := client.SearchZone(context.Background(), 0, 0, 100)
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+// The Nominatim budget must gate only outbound calls: a cached query is
+// served without consuming a token, while an uncached query over budget is
+// rejected before any network access.
+func TestNominatimClient_RateLimitGatesOutboundOnly(t *testing.T) {
+	c := cache.New[[]any]()
+	client := NewNominatimClient(c)
+	// Exhaust the budget so any outbound call would be rejected. In-package
+	// test, so we can swap the limiter directly.
+	client.limiter = rate.NewLimiter(0, 0)
+
+	// Cached lookup must bypass the limiter (key format: "query\x00lang").
+	c.Set("roma\x00", []any{map[string]any{"name": "Roma"}}, time.Hour)
+	got, err := client.Geocode(context.Background(), "roma", "")
+	if err != nil {
+		t.Fatalf("cached lookup should bypass the limiter, got: %v", err)
+	}
+	if res, ok := got.([]any); !ok || len(res) != 1 {
+		t.Fatalf("unexpected cached result: %#v", got)
+	}
+
+	// Uncached lookup over budget must fail fast with ErrRateLimited and never
+	// reach the (hardcoded, real) Nominatim URL.
+	if _, err := client.Geocode(context.Background(), "milano", ""); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("expected ErrRateLimited for uncached over-budget query, got: %v", err)
 	}
 }
 

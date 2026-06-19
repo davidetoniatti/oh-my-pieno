@@ -112,6 +112,22 @@ func TestGzip_PreservesExistingVary(t *testing.T) {
 	}
 }
 
+// Regression: Flush must reach the real writer even when it sits behind a
+// wrapper (statusRecorder) that doesn't itself implement http.Flusher.
+func TestGzip_FlushReachesUnderlyingWriter(t *testing.T) {
+	rec := httptest.NewRecorder()
+	sr := &statusRecorder{ResponseWriter: rec, status: http.StatusOK}
+	gzw := &gzipResponseWriter{ResponseWriter: sr, acceptsGzip: true}
+
+	gzw.Header().Set("Content-Type", "application/json")
+	io.WriteString(gzw, `{"k":"v"}`)
+	gzw.Flush()
+
+	if !rec.Flushed {
+		t.Error("Flush did not propagate through statusRecorder to the underlying writer")
+	}
+}
+
 func TestGzip_DropsContentLength(t *testing.T) {
 	body := strings.Repeat("x", 1024)
 	rr := runGzipMiddleware(func(w http.ResponseWriter, r *http.Request) {

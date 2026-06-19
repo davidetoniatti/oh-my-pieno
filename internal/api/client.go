@@ -18,6 +18,12 @@ import (
 	"ohmypieno/internal/obs"
 )
 
+// Caps on buffered upstream responses, so a misbehaving upstream can't OOM us.
+const (
+	maxUpstreamBytes = 10 << 20 // 10 MiB
+	maxErrorBytes    = 4 << 10  // 4 KiB
+)
+
 type StationProvider interface {
 	SearchZone(ctx context.Context, lat, lng float64, radius int) (*models.SearchResponse, error)
 	GetServiceArea(ctx context.Context, id int) (*models.GasStation, error)
@@ -71,11 +77,11 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body []byte)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(resp.Body)
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBytes))
 		return nil, fmt.Errorf("upstream returned %d: %s", resp.StatusCode, string(b))
 	}
 
-	return io.ReadAll(resp.Body)
+	return io.ReadAll(io.LimitReader(resp.Body, maxUpstreamBytes))
 }
 
 func (c *Client) SearchZone(ctx context.Context, lat, lng float64, radius int) (*models.SearchResponse, error) {

@@ -83,15 +83,17 @@ func (a *App) Handler() http.Handler {
 }
 
 func (a *App) Close() {
-	a.stationsCache.Stop()
-	a.detailsCache.Stop()
-	a.geocodeCache.Stop()
-	a.rateLimiter.stop()
+	// Drain in-flight requests first, then stop the background goroutines
+	// those requests might still touch (caches, rate limiter).
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := a.server.Shutdown(ctx); err != nil {
 		slog.Error("server shutdown error", "error", err)
 	}
+	a.stationsCache.Stop()
+	a.detailsCache.Stop()
+	a.geocodeCache.Stop()
+	a.rateLimiter.stop()
 }
 
 type statusRecorder struct {
@@ -103,6 +105,9 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap lets http.ResponseController reach the underlying writer.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +196,7 @@ type gzipResponseWriter struct {
 	gz          *gzip.Writer
 	decided     bool
 	passthrough bool
+	acceptsGzip bool
 }
 
 func (w *gzipResponseWriter) decide() {
@@ -211,9 +217,17 @@ func (w *gzipResponseWriter) decide() {
 		return
 	}
 
+	// Compressible content varies by Accept-Encoding even when we don't gzip
+	// this response, so a shared cache keys the variants correctly.
+	w.Header().Add("Vary", "Accept-Encoding")
+
+	if !w.acceptsGzip {
+		w.passthrough = true
+		return
+	}
+
 	h := w.Header()
 	h.Del("Content-Length")
-	h.Add("Vary", "Accept-Encoding")
 	h.Set("Content-Encoding", "gzip")
 
 	w.gz = gzipWriterPool.Get().(*gzip.Writer)
@@ -238,13 +252,14 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 	return w.gz.Write(b)
 }
 
+func (w *gzipResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 func (w *gzipResponseWriter) Flush() {
 	if w.gz != nil {
 		w.gz.Flush()
 	}
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
+	// Flush through wrappers (e.g. statusRecorder isn't itself a Flusher).
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
 }
 
 func (w *gzipResponseWriter) close() {
@@ -259,13 +274,18 @@ func (w *gzipResponseWriter) close() {
 
 func gzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") ||
-			r.Header.Get("Sec-WebSocket-Key") != "" {
+		// Never interfere with a WebSocket upgrade.
+		if r.Header.Get("Sec-WebSocket-Key") != "" {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		gzw := &gzipResponseWriter{ResponseWriter: w}
+		// Always wrap so decide() can set Vary on compressible responses even
+		// when this client didn't accept gzip; it only compresses if it did.
+		gzw := &gzipResponseWriter{
+			ResponseWriter: w,
+			acceptsGzip:    strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"),
+		}
 		defer gzw.close()
 		next.ServeHTTP(gzw, r)
 	})

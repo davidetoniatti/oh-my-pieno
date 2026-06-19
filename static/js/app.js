@@ -143,7 +143,7 @@ function loadFuels(urlFuelId) {
 
 function bindControls() {
   elements.fuelSelect.addEventListener("change", () => {
-    state.selectedFuelId = parseInt(elements.fuelSelect.value);
+    state.selectedFuelId = parseInt(elements.fuelSelect.value, 10);
     localStorage.setItem(STORAGE_KEYS.FUEL, state.selectedFuelId);
     const c = state.map.getCenter();
     performSearch(c.lat, c.lng);
@@ -158,7 +158,7 @@ function bindControls() {
   });
 
   elements.radiusSelect.addEventListener("change", (e) => {
-    state.radius = parseInt(e.target.value);
+    state.radius = parseInt(e.target.value, 10);
     const c = state.map.getCenter();
     performSearch(c.lat, c.lng);
     updateURL();

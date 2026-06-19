@@ -15,11 +15,6 @@ const (
 	apiRateBurst    = 40
 	limiterIdleTTL  = 10 * time.Minute
 	cleanupInterval = 2 * time.Minute
-
-	// Nominatim ToS requires no more than 1 req/s. We use a global bucket
-	// to ensure our server IP stays within limits regardless of user count.
-	geocodeRatePerSec = 1
-	geocodeRateBurst  = 2
 )
 
 type ipLimiter struct {
@@ -33,16 +28,13 @@ type rateLimiter struct {
 	trustProxy bool
 	stopCh     chan struct{}
 	once       sync.Once
-
-	globalGeocode *rate.Limiter
 }
 
 func newRateLimiter(trustProxy bool) *rateLimiter {
 	rl := &rateLimiter{
-		limiters:      make(map[string]*ipLimiter),
-		trustProxy:    trustProxy,
-		stopCh:        make(chan struct{}),
-		globalGeocode: rate.NewLimiter(rate.Limit(geocodeRatePerSec), geocodeRateBurst),
+		limiters:   make(map[string]*ipLimiter),
+		trustProxy: trustProxy,
+		stopCh:     make(chan struct{}),
 	}
 	go rl.cleanup()
 	return rl
@@ -52,13 +44,7 @@ func (rl *rateLimiter) stop() {
 	rl.once.Do(func() { close(rl.stopCh) })
 }
 
-func (rl *rateLimiter) allow(key string, isGeocode bool) bool {
-	if isGeocode {
-		if !rl.globalGeocode.Allow() {
-			return false
-		}
-	}
-
+func (rl *rateLimiter) allow(key string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
@@ -118,8 +104,7 @@ func (rl *rateLimiter) middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		isGeocode := r.URL.Path == "/api/geocode"
-		if !rl.allow(rl.clientKey(r), isGeocode) {
+		if !rl.allow(rl.clientKey(r)) {
 			h := w.Header()
 			h.Set("Content-Type", "application/json")
 			h.Set("Retry-After", "1")

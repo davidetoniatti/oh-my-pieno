@@ -1,1 +1,4 @@
 carburanti
+
+# Local Claude Code / DevForge artifacts (review-evidence, session data)
+.claude/

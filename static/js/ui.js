@@ -71,7 +71,13 @@ export function bindCollectionEvents(listEl, onSelect) {
     const item = e.target.closest(".station-item");
     if (!item) return;
     const id = String(item.dataset.id);
-    onSelect(id);
+    // Carry the stored coords so a station outside the current search area
+    // (e.g. a favorite in another city) can still recenter the map.
+    const lat = parseFloat(item.dataset.lat);
+    const lng = parseFloat(item.dataset.lng);
+    const knownLocation =
+      Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    onSelect(id, knownLocation);
   });
 }
 
@@ -95,8 +101,11 @@ export function renderStationList(items, listEl, emptyKey) {
               entry.location.lng,
             )
           : null;
+      const locAttrs = entry.location
+        ? ` data-lat="${entry.location.lat}" data-lng="${entry.location.lng}"`
+        : "";
       return `
-    <li class="station-item" data-id="${entry.id}">
+    <li class="station-item" data-id="${entry.id}"${locAttrs}>
       <div class="station-brand">${escapeHtml(entry.brand || t("nd"))}</div>
       <div class="station-address-container">
         <div class="station-address">${escapeHtml(entry.address || t("addr_not_available"))}</div>

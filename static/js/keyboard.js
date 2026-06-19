@@ -16,12 +16,6 @@ function focusSearch() {
   input.select();
 }
 
-function clickIfPresent(el) {
-  if (!el || el.classList.contains("hidden")) return false;
-  el.click();
-  return true;
-}
-
 function closeTopmost() {
   const settings = document.getElementById("settings-overlay");
   if (settings) {

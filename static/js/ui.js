@@ -141,7 +141,7 @@ function renderContactRow(labelKey, value, hrefPrefix = "") {
   let finalHref = hrefPrefix + escaped;
 
   if (labelKey === "web" && !value.startsWith("http")) {
-    finalHref = "https://" + value;
+    finalHref = "https://" + escaped;
   }
 
   const link =

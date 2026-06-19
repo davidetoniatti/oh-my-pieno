@@ -1,5 +1,6 @@
 import { state, addToHistory, updateURL } from "./state.js";
 import { t } from "./i18n.js";
+import { escapeHtml } from "./formatters.js";
 import { elements, isMobileView } from "./dom.js";
 import {
   searchStations,
@@ -119,7 +120,7 @@ function showPanelLoading() {
 }
 
 function showPanelError(message) {
-  elements.panelContent.innerHTML = `<div class="panel-loading"><p>${t("error", { msg: message })}</p></div>`;
+  elements.panelContent.innerHTML = `<div class="panel-loading"><p>${t("error", { msg: escapeHtml(message) })}</p></div>`;
 }
 
 function resolveStationLocation(station, knownLocation) {

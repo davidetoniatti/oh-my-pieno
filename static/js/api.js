@@ -61,24 +61,31 @@ function getQuantizedKey(lat, lng, radius, fuelId) {
 
 export function searchStations(lat, lng, radius, fuelId) {
   const cacheKey = getQuantizedKey(lat, lng, radius, fuelId);
-  const cached = searchCache.get(cacheKey);
 
-  if (cached) {
-    return Promise.resolve(cached);
-  }
-
+  // Joining an identical in-flight request: leave its controller untouched.
   if (activeSearches.has(cacheKey)) {
     return activeSearches.get(cacheKey);
   }
 
+  // A newer search supersedes any earlier one still in flight for a different
+  // area. Abort it even when this one is served from cache, otherwise the
+  // stale response can land later and overwrite the current markers.
   state.requests.searchAbortController?.abort();
-  state.requests.searchAbortController = new AbortController();
+  state.requests.searchAbortController = null;
+
+  const cached = searchCache.get(cacheKey);
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+
+  const controller = new AbortController();
+  state.requests.searchAbortController = controller;
 
   const promise = (async () => {
     try {
       const res = await fetch(
         `/api/search?lat=${lat}&lng=${lng}&radius=${radius}&fuel=${fuelId}`,
-        { signal: state.requests.searchAbortController.signal },
+        { signal: controller.signal },
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -96,23 +103,29 @@ export function searchStations(lat, lng, radius, fuelId) {
 export function fetchStationDetails(id) {
   const stationId = String(id);
 
+  // Joining an identical in-flight request: leave its controller untouched.
+  if (activeDetails.has(stationId)) {
+    return activeDetails.get(stationId);
+  }
+
+  // Abort any previous details fetch — only the latest selection matters —
+  // even when this one is a cache hit, so a stale response can't arrive later
+  // and overwrite the panel with a different station.
+  state.requests.detailAbortController?.abort();
+  state.requests.detailAbortController = null;
+
   const cached = detailsCache.get(stationId);
   if (cached) {
     return Promise.resolve(cached);
   }
 
-  if (activeDetails.has(stationId)) {
-    return activeDetails.get(stationId);
-  }
-
-  // Abort any previous details fetch. Only the latest selection matters.
-  state.requests.detailAbortController?.abort();
-  state.requests.detailAbortController = new AbortController();
+  const controller = new AbortController();
+  state.requests.detailAbortController = controller;
 
   const promise = (async () => {
     try {
       const res = await fetch(`/api/station?id=${id}`, {
-        signal: state.requests.detailAbortController.signal,
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();

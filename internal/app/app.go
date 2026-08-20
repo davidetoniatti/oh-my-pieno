@@ -82,10 +82,14 @@ func (a *App) Handler() http.Handler {
 	return a.server.Handler
 }
 
+// shutdownTimeout must exceed the longest upstream client timeout (stations:
+// 15s) so an in-flight request can finish draining instead of being cut off.
+const shutdownTimeout = 20 * time.Second
+
 func (a *App) Close() {
 	// Drain in-flight requests first, then stop the background goroutines
 	// those requests might still touch (caches, rate limiter).
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := a.server.Shutdown(ctx); err != nil {
 		slog.Error("server shutdown error", "error", err)

@@ -1,33 +1,23 @@
 import { t } from "./i18n.js";
 
+// Upstream sends ISO 8601 (e.g. 2026-08-20T11:32:06+02:00), but has also used
+// Italian DD/MM/YYYY. new Date() misreads a slash date as US MM/DD/YYYY —
+// silently swapping day and month for any day <= 12 — so parse those by hand
+// and leave everything else (ISO, timestamps) to the native parser.
+function parseUpstreamDate(dateStr) {
+  const m = dateStr.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+  );
+  if (m) {
+    return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+  }
+  return new Date(dateStr);
+}
+
 export function timeAgo(dateStr) {
   if (!dateStr) return null;
-  let date = new Date(dateStr);
-  if (isNaN(date.getTime())) {
-    const parts = dateStr.match(/(\d+)/g);
-    if (parts && parts.length >= 3) {
-      if (parts[0].length === 4) {
-        date = new Date(
-          parts[0],
-          parts[1] - 1,
-          parts[2],
-          parts[3] || 0,
-          parts[4] || 0,
-          parts[5] || 0,
-        );
-      } else if (parts[2].length === 4) {
-        date = new Date(
-          parts[2],
-          parts[1] - 1,
-          parts[0],
-          parts[3] || 0,
-          parts[4] || 0,
-          parts[5] || 0,
-        );
-      }
-    }
-  }
-  if (isNaN(date.getTime())) return null;
+  const date = parseUpstreamDate(dateStr);
+  if (!date || isNaN(date.getTime())) return null;
   const now = new Date();
   const diffMs = now - date;
   if (diffMs < 0) return t("just_now");

@@ -35,6 +35,32 @@ func (m *mockStationProvider) Geocode(ctx context.Context, query, lang string) (
 	return m.geocodeFunc(ctx, query, lang)
 }
 
+func TestSearchHandler_RejectsNaNAndInf(t *testing.T) {
+	mock := &mockStationProvider{
+		searchFunc: func(ctx context.Context, lat, lng float64, radius int) (*models.SearchResponse, error) {
+			t.Fatalf("upstream must not be reached for lat=%v lng=%v", lat, lng)
+			return nil, nil
+		},
+	}
+	srv := NewServer(mock, mock)
+	srv.Config.LatMin, srv.Config.LatMax = 35.0, 48.0
+	srv.Config.LngMin, srv.Config.LngMax = 6.0, 19.0
+	srv.Config.MaxRadius = 50
+
+	handler := srv.ValidateSearchMiddleware(http.HandlerFunc(srv.SearchHandler))
+	for _, q := range []string{
+		"lat=NaN&lng=12.0", "lat=41.0&lng=NaN",
+		"lat=Inf&lng=12.0", "lat=41.0&lng=+Inf", "lat=-Inf&lng=12.0",
+	} {
+		req := httptest.NewRequest("GET", "/api/search?"+q, nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("query %q: expected 400, got %d", q, rr.Code)
+		}
+	}
+}
+
 func TestSearchHandler_DeepValidation(t *testing.T) {
 	mock := &mockStationProvider{}
 	srv := NewServer(mock, mock)

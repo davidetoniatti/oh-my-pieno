@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"strconv"
 )
@@ -32,14 +33,16 @@ func (s *Server) ValidateSearchMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// NaN/Inf parse without error and slip past every range comparison
+		// (all comparisons with NaN are false), so reject them explicitly.
 		lat, err := strconv.ParseFloat(latStr, 64)
-		if err != nil || lat < s.Config.LatMin || lat > s.Config.LatMax {
+		if err != nil || math.IsNaN(lat) || math.IsInf(lat, 0) || lat < s.Config.LatMin || lat > s.Config.LatMax {
 			s.handleError(w, NewAppError(http.StatusBadRequest, "invalid or out of range lat", err))
 			return
 		}
 
 		lng, err := strconv.ParseFloat(lngStr, 64)
-		if err != nil || lng < s.Config.LngMin || lng > s.Config.LngMax {
+		if err != nil || math.IsNaN(lng) || math.IsInf(lng, 0) || lng < s.Config.LngMin || lng > s.Config.LngMax {
 			s.handleError(w, NewAppError(http.StatusBadRequest, "invalid or out of range lng", err))
 			return
 		}

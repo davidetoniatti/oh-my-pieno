@@ -100,10 +100,14 @@ function collectRenderableStations() {
 
   for (const station of state.stationsById.values()) {
     if (!station.location || station.selectedPrice == null) continue;
-    if (!matchesBrandFilter(station)) continue;
 
     const id = String(station.id);
     const isSelected = id === state.selectedStationId;
+
+    // The selected station is always kept visible, exempt from both the brand
+    // filter and the viewport bounds — otherwise its marker is removed while
+    // the panel stays open and #map keeps the has-selection dimming stuck.
+    if (!isSelected && !matchesBrandFilter(station)) continue;
 
     if (
       !isSelected &&
@@ -201,6 +205,9 @@ function removeStaleMarkers(nextStationIds) {
 
     if (state.selectedStationId === id) {
       state.selectedStationId = null;
+      // Drop the dimming class too, or remaining markers stay faded with
+      // nothing selected.
+      document.getElementById("map")?.classList.remove("has-selection");
     }
   }
 }

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -95,32 +96,48 @@ func TestRateLimiter_TrustProxyHeaders(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Exhaust one forwarded client.
-	for i := 0; i < apiRateBurst; i++ {
+	// The right-most X-Forwarded-For entry is what the trusted proxy appends;
+	// it identifies the real client. Send it as a single trusted hop.
+	send := func(xff string) int {
 		req := httptest.NewRequest("GET", "/api/search", nil)
 		req.RemoteAddr = "10.0.0.1:12345"
-		req.Header.Set("X-Forwarded-For", "203.0.113.7, 10.0.0.1")
+		req.Header.Set("X-Forwarded-For", xff)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
+		return rr.Code
 	}
 
-	// Same forwarded IP should now be blocked.
-	req := httptest.NewRequest("GET", "/api/search", nil)
-	req.RemoteAddr = "10.0.0.1:12345"
-	req.Header.Set("X-Forwarded-For", "203.0.113.7, 10.0.0.1")
-	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusTooManyRequests {
-		t.Errorf("expected 429 for exhausted forwarded IP, got %d", rr.Code)
+	// Exhaust one real client's burst.
+	for i := 0; i < apiRateBurst; i++ {
+		send("198.51.100.5")
 	}
 
-	// A different forwarded IP (same RemoteAddr) should still be allowed.
-	req2 := httptest.NewRequest("GET", "/api/search", nil)
-	req2.RemoteAddr = "10.0.0.1:12345"
-	req2.Header.Set("X-Forwarded-For", "203.0.113.8")
-	rr2 := httptest.NewRecorder()
-	handler.ServeHTTP(rr2, req2)
-	if rr2.Code != http.StatusOK {
-		t.Errorf("expected 200 for different forwarded IP, got %d", rr2.Code)
+	// A forged left-most entry must NOT mint a fresh identity: the real client
+	// (right-most, appended by the proxy) stays blocked.
+	if code := send("1.2.3.4, 198.51.100.5"); code != http.StatusTooManyRequests {
+		t.Errorf("expected 429 despite forged X-Forwarded-For prefix, got %d", code)
+	}
+
+	// A genuinely different client (different right-most) is isolated.
+	if code := send("203.0.113.8"); code != http.StatusOK {
+		t.Errorf("expected 200 for a different client, got %d", code)
+	}
+}
+
+func TestRateLimiter_MapBounded(t *testing.T) {
+	rl := newRateLimiter(true)
+	defer rl.stop()
+
+	// All keys are fresh (lastSeen=now), so pruning can't reclaim any: once at
+	// the cap, new keys must be refused rather than grow the table.
+	for i := 0; i < maxLimiters+1000; i++ {
+		rl.allow(fmt.Sprintf("198.51.%d.%d", i/256, i%256))
+	}
+
+	rl.mu.Lock()
+	n := len(rl.limiters)
+	rl.mu.Unlock()
+	if n > maxLimiters {
+		t.Errorf("limiter map grew to %d, exceeds cap %d", n, maxLimiters)
 	}
 }

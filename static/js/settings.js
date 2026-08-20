@@ -55,6 +55,9 @@ const SHORTCUTS = [
 
 export function openSettingsModal() {
   if (document.getElementById("settings-overlay")) return;
+  // The tutorial owns the screen while open; don't stack a second modal and
+  // focus-trap on top of it (its "?" shortcut would otherwise do just that).
+  if (document.getElementById("tutorial-overlay")) return;
 
   const preferencesTitle = createGroupTitle("preferences_title");
   const settingsSection = document.createElement("div");
